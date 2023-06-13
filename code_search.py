@@ -1,3 +1,5 @@
+import torch
+import pandas as pd
 from pathlib import Path
 from itertools import chain
 
@@ -11,21 +13,23 @@ def build_texts_from_repository(repo_dir):
     """Return a dataset of the non-blank lines of code
     """
     dataset = []
-    file_types = []
+
     for path in chain(
         Path(repo_dir).glob("**/*.py"),
         Path(repo_dir).glob("**/*.md"),
     ):
         assert path.is_file() and path.suffix
         lines = path.read_text().splitlines()
-        
+
         dataset.extend(
-            [{"line_number": i,
-               "line": line,
-               "path": str(path.relative_to(repo_dir))}
-        for i, line in enumerate(lines)
-        if line.strip() != ""
-         ]
+            [
+                {
+                    "line_number": i,
+                    "line": line,
+                    "path": str(path.relative_to(repo_dir))}
+                for i, line in enumerate(lines)
+                if line.strip() != ""
+            ]
         )
     return dataset
 
@@ -66,11 +70,12 @@ def run_semantic_search(embedder, dataset, queries, top_k):
     https://www.sbert.net/examples/applications/semantic-search/README.html#python
     """
 
-    # TODO let's make sure I tape back the line numbers from the dataset, after getting the corpus for the encoder, 
     # so I can do the evaluation later.
     corpus = [x["line"] for x in dataset]
     corpus_embeddings = embedder.encode(corpus, convert_to_tensor=True)
-    
+
+    truthdf = pd.DataFrame.from_records(dataset)
+
     results = []
 
     for query in tqdm(queries):
@@ -80,10 +85,14 @@ def run_semantic_search(embedder, dataset, queries, top_k):
         cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
         top_results = torch.topk(cos_scores, k=top_k)
 
-        for score, idx in zip(top_results[0], top_results[1]):
-            print(corpus[idx].strip(), "(Score: {:.4f})".format(score))
+        results.extend(
+            [
+                {
+                    "score": score, "idx": idx, "query": query
+                }
+                for score, idx in zip(top_results[0], top_results[1])
+            ]
+        )
+    resultsdf = pd.DataFrame.from_records(results)
 
-            ...
-        ...
-    ...
-
+    return resultsdf.merge(truthdf, left_on="idx", right_index=True, how="left")
