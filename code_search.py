@@ -4,6 +4,8 @@ from itertools import chain
 from date_utils import utc_ts
 from tqdm import tqdm
 
+from sentence_transformers import SentenceTransformer, util
+
 
 def build_texts_from_repository(repo_dir):
     """Return a dataset of the non-blank lines of code
@@ -57,7 +59,7 @@ def build_query_dataset(queries, dataset):
     return search_results
 
 
-def run_search(dataset, queries):
+def run_semantic_search(embedder, dataset, queries, top_k):
     """
 
     Reference:
@@ -67,28 +69,21 @@ def run_search(dataset, queries):
     # TODO let's make sure I tape back the line numbers from the dataset, after getting the corpus for the encoder, 
     # so I can do the evaluation later.
     corpus = [x["line"] for x in dataset]
+    corpus_embeddings = embedder.encode(corpus, convert_to_tensor=True)
     
+    results = []
 
-    top_k = min(5, len(corpus))
-    for query in queries:
+    for query in tqdm(queries):
         query_embedding = embedder.encode(query, convert_to_tensor=True)
 
-        # We use cosine-similarity and torch.topk to find the highest 5 scores
+        # We use cosine-similarity and torch.topk to find the highest scores
         cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
         top_results = torch.topk(cos_scores, k=top_k)
-
-        print("\n\n======================\n\n")
-        print("Query:", query)
-        print("\nTop 5 most similar sentences in corpus:")
 
         for score, idx in zip(top_results[0], top_results[1]):
             print(corpus[idx].strip(), "(Score: {:.4f})".format(score))
 
-        """
-        # Alternatively, we can also use util.semantic_search to perform cosine similarty + topk
-        hits = util.semantic_search(query_embedding, corpus_embeddings, top_k=5)
-        hits = hits[0]      #Get the hits for the first query
-        for hit in hits:
-            print(corpus[hit['corpus_id']], "(Score: {:.4f})".format(hit['score']))
-        """
+            ...
+        ...
+    ...
 
