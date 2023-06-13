@@ -93,6 +93,9 @@ def run_semantic_search(embedder, dataset, queries, top_k):
                 for score, idx in zip(top_results[0], top_results[1])
             ]
         )
-    resultsdf = pd.DataFrame.from_records(results)
+    resultsdf = pd.DataFrame.from_records(results).astype(
+        {"idx": "int", "score": "float"})
 
-    return resultsdf.merge(truthdf, left_on="idx", right_index=True, how="left")
+    return resultsdf.merge(
+        truthdf, left_on="idx", right_index=True, how="left"
+    ).drop(["idx"], axis=1)
